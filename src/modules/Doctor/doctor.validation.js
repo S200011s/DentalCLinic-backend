@@ -2,13 +2,7 @@ import Joi from "joi";
 import { isValidObjectId } from "../../../utils/isValidObjectId.js"; 
 
 export const DoctorSchema = Joi.object({
-  userId: Joi.string().length(24).hex().required().messages({
-    "string.base": "User ID must be a string",
-    "string.length": "User ID must be 24 characters",
-    "string.hex": "User ID must be a valid ObjectId",
-    "any.required": "User ID is required",
-  }),
-
+  
   specialization: Joi.array()
     .items(Joi.string().min(2).max(100))
     .min(1)
@@ -44,7 +38,7 @@ export const DoctorSchema = Joi.object({
 
   services: Joi.array()
     .items(Joi.string().length(24).hex())
-    .min(1)
+    .optional()
     .messages({
       "array.base": "Services must be an array of valid ObjectIds",
       "array.min": "At least one service is required",
