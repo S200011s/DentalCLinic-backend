@@ -6,7 +6,7 @@ import { allowRoles } from "../../middleware/checkRole.js";
 import { validate, validateParams } from "../../middleware/validationMiddleware.js";
 import { cleanBody } from "../../middleware/cleanBodyMiddleware.js";
 import { upload } from "../../middleware/upload.js";
-import { parseDoctorFields } from "../../middleware/fieldsToParse.js";
+import { parseDoctorFields,parseServiceFields  } from "../../middleware/fieldsToParse.js";
 import * as dashVal from "./dashboard.validation.js";
 
 const router = Router();
@@ -39,6 +39,7 @@ router.delete("/doctors/:id",
 /* ----------------- Service Management ----------------- */
 router.post("/services",
   upload.single("image"),
+  parseServiceFields ,
   validate(dashVal.servicesSchema),
   dashController.createServices
 );

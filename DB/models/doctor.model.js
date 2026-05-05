@@ -2,12 +2,8 @@ import mongoose, { Schema } from "mongoose";
 
 const doctorSchema = new Schema(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      unique: true,
-    },
+    firstName: { type: String, required: true },
+    lastName: { type: String, required: true },
     profileImage: { type: String },
     specialization: [{ type: String, required: true, trim: true }],
     experience: { type: Number, required: true },

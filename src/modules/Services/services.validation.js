@@ -33,18 +33,16 @@ import { isValidObjectId } from "../../../utils/isValidObjectId.js";
     "any.required": "Duration is required",
   }),
    doctors: Joi.array()
-    .items(
-      Joi.string()
-        .custom(isValidObjectId, "ObjectId Validation")
-        .messages({ "any.invalid": "Each doctor ID must be a valid ObjectId" })
-    )
-    .min(1)
-    .required()
-    .messages({
-      "array.base": "Doctors must be an array",
-      "array.min": "At least one doctor must be assigned",
-      "any.required": "Doctors field is required",
-    }),
+  .items(
+    Joi.string()
+      .custom(isValidObjectId)
+      .messages({ "any.invalid": "Each doctor ID must be a valid ObjectId" })
+  )
+  .optional()
+  .default([]) 
+  .messages({
+    "array.base": "Doctors must be an array",
+  }),
     category: Joi.string()
     .custom(isValidObjectId, "ObjectId Validation")
     .required()

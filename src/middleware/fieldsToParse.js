@@ -20,3 +20,21 @@ export const parseDoctorFields = (req, res, next) => {
     return res.status(400).json({ message: "Invalid JSON format in body fields" });
   }
 };
+
+export const parseServiceFields = (req, res, next) => {
+  try {
+    if (req.body.doctors) {
+      if (typeof req.body.doctors === "string") {
+        req.body.doctors = JSON.parse(req.body.doctors);
+      }
+
+      if (!Array.isArray(req.body.doctors)) {
+        return res.status(400).json({ message: "Doctors must be an array" });
+      }
+    }
+
+    next();
+  } catch {
+    return res.status(400).json({ message: "Invalid doctors format" });
+  }
+};

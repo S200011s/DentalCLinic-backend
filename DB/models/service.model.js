@@ -7,7 +7,7 @@ const serviceSchema = new Schema(
     price: { type: Number, required: true,index: true },
     sessions:{ type: String,index: true},
     duration: { type: String,required: true},
-    doctors: [{ type: Schema.Types.ObjectId, ref: "Doctor",required: true,index: true }],
+    doctors: [{ type: Schema.Types.ObjectId, ref: "Doctor",index: true }],
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true ,index: true},
     image: { type: String,required: true},
   },

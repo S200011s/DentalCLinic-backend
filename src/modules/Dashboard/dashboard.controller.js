@@ -15,6 +15,8 @@ import { extractPublicId } from "../../../utils/extractPublicId.js";
 export const createDoctor = async (req, res, next) => {
   try {
     const {
+      firstName,        
+      lastName, 
       specialization,
       experience,
       certifications,
@@ -23,6 +25,29 @@ export const createDoctor = async (req, res, next) => {
       services,
     } = req.body;
 
+    if (!firstName || !lastName) {
+      return res.status(400).json({ message: "First name and last name are required" });
+    }
+    
+    // Parse specialization if sent as JSON string
+    let parsedSpecialization = specialization;
+    if (typeof specialization === 'string') {
+      try {
+        parsedSpecialization = JSON.parse(specialization);
+      } catch {
+        parsedSpecialization = [specialization];
+      }
+    }
+
+    // Parse certifications if sent as JSON string
+    let parsedCertifications = certifications;
+    if (typeof certifications === 'string') {
+      try {
+        parsedCertifications = JSON.parse(certifications);
+      } catch {
+        parsedCertifications = [certifications];
+      }
+    }
     // Validate services type
     if (services && !Array.isArray(services)) {
       return res.status(400).json({ message: "Services must be an array" });
@@ -50,9 +75,11 @@ export const createDoctor = async (req, res, next) => {
     const workImages = req.files.workImages.map((file) => file.path);
 
     const doctor = new Doctor({
-      specialization,
+      firstName,
+      lastName,
+      specialization: parsedSpecialization || [],
       experience,
-      certifications,
+      certifications: parsedCertifications || [],
       bio,
       availableTimes: Array.isArray(availableTimes) ? availableTimes : []     ,
       profileImage: adminUploadedImage,
@@ -72,7 +99,15 @@ export const createDoctor = async (req, res, next) => {
 
     res.status(201).json({
       message: "Doctor created successfully",
-      doctor,
+      doctor: {
+        _id: doctor._id,
+        firstName: doctor.firstName,
+        lastName: doctor.lastName,
+        fullName: `${doctor.firstName} ${doctor.lastName}`,
+        specialization: doctor.specialization,
+        experience: doctor.experience,
+        profileImage: doctor.profileImage,
+      },
     });
   } catch (error) {
     next(error);
@@ -253,25 +288,6 @@ export const createServices = async (req, res, next) => {
       return res.status(400).json({ message: "Service with this name already exists!" });
     }
 
-    // if (!doctors || !Array.isArray(doctors) || doctors.length === 0) {
-    //   return res.status(400).json({ message: "Doctors are required and must be a non-empty array" });
-    // }
-
-    // const validDoctors = await Doctor.find({ _id: { $in: doctors } });
-    // if (validDoctors.length !== doctors.length) {
-    //   return res.status(400).json({ message: "Some doctors not found!" });
-    // }
-
-    // const newService = await Service.create({
-    //   ...req.body,
-    //   doctors,
-    //   image: req.file.path,
-    // });
-
-    // await Doctor.updateMany(
-    //   { _id: { $in: doctors } },
-    //   { $addToSet: { services: newService._id } }
-    // );
 // ✅ Allow doctors to be optional or empty array
     let validDoctors = [];
     if (doctors && Array.isArray(doctors) && doctors.length > 0) {

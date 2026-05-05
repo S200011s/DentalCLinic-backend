@@ -2,7 +2,19 @@ import Joi from "joi";
 import { isValidObjectId } from "../../../utils/isValidObjectId.js"; 
 
 export const DoctorSchema = Joi.object({
-  
+  firstName: Joi.string().min(2).max(50).required().messages({
+    "string.base": "First name must be a string",
+    "string.min": "First name must be at least 2 characters",
+    "string.max": "First name must be at most 50 characters",
+    "any.required": "First name is required",
+  }),
+
+  lastName: Joi.string().min(2).max(50).required().messages({
+    "string.base": "Last name must be a string",
+    "string.min": "Last name must be at least 2 characters",
+    "string.max": "Last name must be at most 50 characters",
+    "any.required": "Last name is required",
+  }),
   specialization: Joi.array()
     .items(Joi.string().min(2).max(100))
     .min(1)
@@ -86,6 +98,17 @@ export const DoctorSchema = Joi.object({
 
 
 export const editDoctorSchema = Joi.object({
+  firstName: Joi.string().min(2).max(50).optional().messages({
+    "string.base": "First name must be a string",
+    "string.min": "First name must be at least 2 characters",
+    "string.max": "First name must be at most 50 characters",
+  }),
+
+  lastName: Joi.string().min(2).max(50).optional().messages({
+    "string.base": "Last name must be a string",
+    "string.min": "Last name must be at least 2 characters",
+    "string.max": "Last name must be at most 50 characters",
+  }),
   specialization: Joi.array()
     .items(Joi.string().min(2).max(100))
     .optional()
