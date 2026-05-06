@@ -17,7 +17,11 @@ export const register = async (req, res, next) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const savedAddress = await Address.create(address);
+    let savedAddressId = null;
+    if (address) {
+      const savedAddress = await Address.create(address);
+      savedAddressId = savedAddress._id;
+    }
 
     const newUser = new User({
       firstName,
@@ -25,15 +29,28 @@ export const register = async (req, res, next) => {
       email,
       password: hashedPassword,
       phone,
-      address: savedAddress._id,
+      address: savedAddressId,
       age,
+      isLoggedIn: true,
     });
 
     await newUser.save();
 
+    const token = jwt.sign(
+      { userId: newUser._id, role: newUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     res.status(201).json({
       message: "User registered successfully",
-      userId: newUser._id,
+      token,
+      user: {
+        id: newUser._id,
+        name: `${newUser.firstName} ${newUser.lastName}`,
+        email: newUser.email,
+        role: newUser.role,
+      },
     });
   } catch (error) {
     next(error);

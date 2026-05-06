@@ -17,11 +17,11 @@ export const registerSchema = Joi.object({
 
   email: Joi.string()
     .email({ tlds: { allow: false } })
-    .pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+    .pattern(/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/)
     .required()
     .messages({
       "string.email": "Email must be a valid email address",
-      "string.pattern.base": "Email format is invalid",
+      "string.pattern.base": "Email format is invalid (e.g. user@example.com)",
       "string.empty": "Email is required",
     }),
 
@@ -72,9 +72,11 @@ export const registerSchema = Joi.object({
 export const loginSchema = Joi.object({
   email: Joi.string()
     .email({ tlds: { allow: false } })
+    .pattern(/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/)
     .required()
     .messages({
       "string.email": "Email must be valid",
+      "string.pattern.base": "Email format is invalid (e.g. user@example.com)",
       "string.empty": "Email is required",
     }),
 
