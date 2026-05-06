@@ -13,4 +13,6 @@ router.get(
 );
 
 
+router.get("/",serviceController.getTopRatedDoctors)
+
 export default router;

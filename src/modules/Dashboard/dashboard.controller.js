@@ -29,7 +29,6 @@ export const createDoctor = async (req, res, next) => {
       return res.status(400).json({ message: "First name and last name are required" });
     }
     
-    // Parse specialization if sent as JSON string
     let parsedSpecialization = specialization;
     if (typeof specialization === 'string') {
       try {
@@ -39,7 +38,6 @@ export const createDoctor = async (req, res, next) => {
       }
     }
 
-    // Parse certifications if sent as JSON string
     let parsedCertifications = certifications;
     if (typeof certifications === 'string') {
       try {
@@ -48,12 +46,10 @@ export const createDoctor = async (req, res, next) => {
         parsedCertifications = [certifications];
       }
     }
-    // Validate services type
     if (services && !Array.isArray(services)) {
       return res.status(400).json({ message: "Services must be an array" });
     }
 
-    // Validate services if provided
     if (services && services.length > 0) {
       const validServices = await Service.find({ _id: { $in: services } });
       if (validServices.length !== services.length) {
@@ -61,13 +57,11 @@ export const createDoctor = async (req, res, next) => {
       }
     }
 
-    // Profile image is required
     const adminUploadedImage = req.files?.profileImage?.[0]?.path;
     if (!adminUploadedImage) {
       return res.status(400).json({ message: "Profile image is required" });
     }
 
-    // Work images validation
     if (!req.files?.workImages || req.files.workImages.length === 0) {
       return res.status(400).json({ message: "Work images are required" });
     }
@@ -89,7 +83,6 @@ export const createDoctor = async (req, res, next) => {
 
     await doctor.save();
 
-    // If services exist, add doctor to each service's doctors array
     if (services && services.length > 0) {
       await Service.updateMany(
         { _id: { $in: services } },
@@ -115,17 +108,27 @@ export const createDoctor = async (req, res, next) => {
 };
 
 /* ---------------------------- Edit Doctor by ID --------------------------- */
-
 export const updateDoctor = async (req, res, next) => {
   try {
     const doctorId = req.params.id;
     const updatedData = { ...req.body };
     const oldDoctor = await Doctor.findById(doctorId);
+    
     if (!oldDoctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    // Validate services type if provided
+    if (updatedData.availableTimes && typeof updatedData.availableTimes === 'string') {
+      try {
+        updatedData.availableTimes = JSON.parse(updatedData.availableTimes);
+      } catch (error) {
+        return res.status(400).json({ 
+          message: "Invalid JSON format in availableTimes field",
+          error: error.message 
+        });
+      }
+    }
+
     if (updatedData.services && !Array.isArray(updatedData.services)) {
       return res.status(400).json({ message: "Services must be an array" });
     }
@@ -133,7 +136,6 @@ export const updateDoctor = async (req, res, next) => {
       updatedData.services = [];
     }
 
-    // Validate services if provided
     if (updatedData.services && updatedData.services.length > 0) {
       for (const serviceId of updatedData.services) {
         const service = await Service.findById(serviceId);
@@ -145,7 +147,14 @@ export const updateDoctor = async (req, res, next) => {
       }
     }
 
-    // Handle profile image update
+    if (updatedData.specialization && typeof updatedData.specialization === 'string') {
+      updatedData.specialization = [updatedData.specialization];
+    }
+
+    if (updatedData.certifications && typeof updatedData.certifications === 'string') {
+      updatedData.certifications = [updatedData.certifications];
+    }
+
     if (req.files?.profileImage?.length > 0) {
       updatedData.profileImage = req.files.profileImage[0].path;
 
@@ -157,7 +166,6 @@ export const updateDoctor = async (req, res, next) => {
       updatedData.profileImage = oldDoctor.profileImage;
     }
 
-    // Handle work images update
     if (req.files?.workImages?.length > 0) {
       if (oldDoctor.workImages && oldDoctor.workImages.length > 0) {
         for (const imageUrl of oldDoctor.workImages) {
@@ -169,7 +177,6 @@ export const updateDoctor = async (req, res, next) => {
       updatedData.workImages = req.files.workImages.map((file) => file.path);
     }
 
-    // Sync doctor services with Service collection - ONLY if services field was provided
     if (updatedData.services !== undefined) {
       const oldServicesStr = (oldDoctor.services || []).map(id => id.toString());
       const newServicesStr = (updatedData.services || []).map(id => id.toString());
@@ -211,6 +218,7 @@ export const updateDoctor = async (req, res, next) => {
       doctor: updatedDoctor,
     });
   } catch (error) {
+    console.error("Update doctor error:", error);
     next(error);
   }
 };

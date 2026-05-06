@@ -50,13 +50,17 @@ const app = express();
 //   })
 // );
 
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    credentials: true,
-  })
-);
-
+// app.use(
+//   cors({
+//     origin: process.env.FRONTEND_URL || "http://localhost:5173",
+//     credentials: true,
+//   })
+// );
+//change before production 
+app.use(cors({
+  origin: true, 
+  credentials: true
+}));
 app.post(
   "/webhook/stripe",
   express.raw({ type: "application/json" }),
@@ -89,9 +93,9 @@ db_connection();
 app.use("/api/auth", AuthRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/user", userInfo);
-app.use("/api/doctors", doctorInfo);
+app.use("/api/doctor", doctorInfo);
 app.use("/api/services", services);
-app.use("/api/categories", category);
+app.use("/api/category", category);
 app.use("/api/search", searchRoutes);
 app.use("/api/appointment", appointmentInfo);
 app.use("/api/payments", paymentRoutes);
