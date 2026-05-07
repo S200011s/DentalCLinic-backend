@@ -21,6 +21,11 @@ router.get ('/slots',isAuth,
 router.get("/my", isAuth, 
     appointmentController.getMyAppointments);
 
+router.get("/doctor-appointments", isAuth,
+    allowRoles('doctor'),
+    appointmentController.getDoctorAppointments
+);
+
 router.patch ('/confirm/:id',isAuth, 
     allowRoles('admin'),
     appointmentController.confirmAppointment
@@ -54,8 +59,8 @@ router.get ('/stats',isAuth,
     appointmentController.getAppointmentStats
 )
 
-router.patch ('complete/:id', isAuth,
-    allowRoles('admin'),
+router.patch ('/complete/:id', isAuth,
+    allowRoles('admin', 'doctor'),
     appointmentController.markAppointmentCompleted
 )
 

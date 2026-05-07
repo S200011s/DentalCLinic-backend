@@ -345,8 +345,7 @@ export const getSlotsStatus = async (req, res) => {
   }
 };
 
-/* ---------------------------- To Make Just One Appoinment For Day ---------------------------- */
-
+/* ---------------------------- Get My Appointments (Client) ---------------------------- */
 export const getMyAppointments = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -355,6 +354,28 @@ export const getMyAppointments = async (req, res) => {
     res.status(200).json({ appointments });
   } catch (error) {
     res.status(500).json({ message: "Error fetching your appointments" });
+  }
+};
+
+/* ---------------------------- Get Doctor's Appointments ---------------------------- */
+export const getDoctorAppointments = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Find the doctor record associated with this user
+    const doctor = await Doctor.findOne({ userId });
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    const appointments = await Appointment.find({ doctor: doctor._id })
+      .populate("user", "firstName lastName email phone age")
+      .populate("service", "name price")
+      .sort({ date: 1, startTime: 1 });
+
+    res.status(200).json({ appointments });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching doctor appointments" });
   }
 };
 
@@ -1149,7 +1170,11 @@ export const rescheduleAppointment = async (req, res) => {
         appointment.date = newDate;
         appointment.startTime = newStartTime;
         appointment.endTime = newEndTime;
-        appointment.status = 'rescheduled';
+        
+        // If Admin reschedules, it stays confirmed. If Client does it, it goes to pending.
+        const isAdmin = req.user.role === 'admin';
+        appointment.status = isAdmin ? 'confirmed' : 'pending';
+        
         appointment.rescheduledFrom = oldAppointment._id;
 
         await appointment.save();
@@ -1254,8 +1279,8 @@ export const markAppointmentCompleted = async (req, res) => {
     }
 
     const now = new Date();
-    if (now < new Date(appointment.endTime)) {
-      return res.status(400).json({ message: 'Cannot complete before session ends' });
+    if (now < new Date(appointment.startTime)) {
+      return res.status(400).json({ message: 'Cannot complete before session starts' });
     }
 
     appointment.status = 'completed';
