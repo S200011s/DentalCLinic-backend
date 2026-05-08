@@ -9,6 +9,7 @@ import { upload } from "../../middleware/upload.js";
 import { parseDoctorFields,parseServiceFields  } from "../../middleware/fieldsToParse.js";
 import * as dashVal from "./dashboard.validation.js";
 
+
 const router = Router();
 
 // Global Admin Protection
@@ -74,4 +75,23 @@ router.delete("/categories/:id",
   dashController.deleteCategory
 );
 
+
+/* ----------------- gallery Management ----------------- */
+
+
+router.post(
+  "/upload",
+  upload.single("image"),
+  dashController.uploadImage
+);
+router.delete(
+  "/gallery/:id",
+  dashController.deleteImage
+);
+
+  router.put(
+  "/gallery/:id",
+  upload.single("image"),
+  dashController.updateImage
+);
 export default router;

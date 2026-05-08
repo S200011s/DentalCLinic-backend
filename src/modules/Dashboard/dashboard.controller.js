@@ -6,6 +6,9 @@ import Category from "../../../DB/models/serviceCategory.model.js";
 import ReviewDoctors from "../../../DB/models/reviewDoctors.model.js";
 import { v2 as cloudinary } from "cloudinary";
 import { extractPublicId } from "../../../utils/extractPublicId.js";
+import GalleryImage from "../../../DB/models/gallery.model.js";
+
+
 
 
 
@@ -519,5 +522,80 @@ export const deleteCategory = async (req, res, next) => {
     next(error);
   } finally {
     session.endSession();
+  }
+};
+
+
+/* ----------------- gallery Management ----------------- */
+
+export const uploadImage = async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ message: "No file uploaded" });
+
+    const newImage = await GalleryImage.create({
+      imageUrl: file.path,
+      publicId: file.filename, 
+    });
+
+    res.status(201).json(newImage);
+  } catch (err) {
+    res.status(500).json({ error: "Upload failed", details: err.message });
+  }
+};
+
+export const deleteImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const image = await GalleryImage.findById(id);
+    if (!image) return res.status(404).json({ message: "Image not found" });
+
+    console.log("Deleting image with ID:", id);
+    console.log("Public ID to delete from Cloudinary:", image.publicId);
+
+    const result = await cloudinary.uploader.destroy(image.publicId);
+    console.log("Cloudinary destroy result:", result);
+
+    await GalleryImage.findByIdAndDelete(id); 
+
+    res.json({ message: "Image deleted successfully" });
+  } catch (err) {
+    console.error("Error in deleteImage:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const updateImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+    
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const oldImage = await GalleryImage.findById(id);
+    if (!oldImage) {
+      return res.status(404).json({ message: "Image not found" });
+    }
+
+    await cloudinary.uploader.destroy(oldImage.publicId);
+
+    const updatedImage = await GalleryImage.findByIdAndUpdate(
+      id,
+      {
+        imageUrl: file.path,
+        publicId: file.filename,
+      },
+      { new: true }
+    );
+
+    res.status(200).json({ 
+      message: "Image updated successfully", 
+      image: updatedImage 
+    });
+  } catch (err) {
+    console.error("Error in updateImage:", err);
+    res.status(500).json({ error: "Update failed", details: err.message });
   }
 };
