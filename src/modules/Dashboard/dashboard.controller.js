@@ -12,14 +12,20 @@ import GalleryImage from "../../../DB/models/gallery.model.js";
 
 
 
+import bcrypt from "bcryptjs";
+
 /* ----------------- Doctor Management ----------------- */
 
 /* ---------------------------- Create Doctor ---------------------------- */
 export const createDoctor = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const {
-      firstName,        
-      lastName, 
+      firstName,
+      lastName,
+      email,
+      password,
       specialization,
       experience,
       certifications,
@@ -28,12 +34,20 @@ export const createDoctor = async (req, res, next) => {
       services,
     } = req.body;
 
-    if (!firstName || !lastName) {
-      return res.status(400).json({ message: "First name and last name are required" });
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({
+        message: "First name, last name, email, and password are required",
+      });
     }
-    
+
+    const existingUser = await User.findOne({ email }).session(session);
+    if (existingUser) {
+      await session.abortTransaction();
+      return res.status(409).json({ message: "Email already in use" });
+    }
+
     let parsedSpecialization = specialization;
-    if (typeof specialization === 'string') {
+    if (typeof specialization === "string") {
       try {
         parsedSpecialization = JSON.parse(specialization);
       } catch {
@@ -42,35 +56,54 @@ export const createDoctor = async (req, res, next) => {
     }
 
     let parsedCertifications = certifications;
-    if (typeof certifications === 'string') {
+    if (typeof certifications === "string") {
       try {
         parsedCertifications = JSON.parse(certifications);
       } catch {
         parsedCertifications = [certifications];
       }
     }
-    if (services && !Array.isArray(services)) {
-      return res.status(400).json({ message: "Services must be an array" });
+
+    let parsedAvailableTimes = availableTimes;
+    if (typeof availableTimes === "string") {
+      try {
+        parsedAvailableTimes = JSON.parse(availableTimes);
+      } catch {
+        parsedAvailableTimes = [];
+      }
     }
 
-    if (services && services.length > 0) {
-      const validServices = await Service.find({ _id: { $in: services } });
-      if (validServices.length !== services.length) {
-        return res.status(400).json({ message: "Some services not found" });
-      }
+    if (services && !Array.isArray(services)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Services must be an array" });
     }
 
     const adminUploadedImage = req.files?.profileImage?.[0]?.path;
     if (!adminUploadedImage) {
+      await session.abortTransaction();
       return res.status(400).json({ message: "Profile image is required" });
     }
 
     if (!req.files?.workImages || req.files.workImages.length === 0) {
+      await session.abortTransaction();
       return res.status(400).json({ message: "Work images are required" });
     }
 
     const workImages = req.files.workImages.map((file) => file.path);
 
+    // 1. Create User
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      role: "doctor",
+      image: adminUploadedImage,
+    });
+    await newUser.save({ session });
+
+    // 2. Create Doctor
     const doctor = new Doctor({
       firstName,
       lastName,
@@ -78,23 +111,28 @@ export const createDoctor = async (req, res, next) => {
       experience,
       certifications: parsedCertifications || [],
       bio,
-      availableTimes: Array.isArray(availableTimes) ? availableTimes : []     ,
+      availableTimes: Array.isArray(parsedAvailableTimes)
+        ? parsedAvailableTimes
+        : [],
       profileImage: adminUploadedImage,
       workImages,
       services: services || [],
+      userId: newUser._id,
     });
 
-    await doctor.save();
+    await doctor.save({ session });
 
     if (services && services.length > 0) {
       await Service.updateMany(
         { _id: { $in: services } },
         { $addToSet: { doctors: doctor._id } }
-      );
+      ).session(session);
     }
 
+    await session.commitTransaction();
+
     res.status(201).json({
-      message: "Doctor created successfully",
+      message: "Doctor and User account created successfully",
       doctor: {
         _id: doctor._id,
         firstName: doctor.firstName,
@@ -103,10 +141,14 @@ export const createDoctor = async (req, res, next) => {
         specialization: doctor.specialization,
         experience: doctor.experience,
         profileImage: doctor.profileImage,
+        userId: newUser._id,
       },
     });
   } catch (error) {
+    await session.abortTransaction();
     next(error);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -261,6 +303,9 @@ export const deleteDoctorById = async (req, res, next) => {
     
     await ReviewDoctors.deleteMany({ doctor: doctor._id }).session(session);
 
+    if (doctor.userId) {
+      await User.findByIdAndDelete(doctor.userId).session(session);
+    }
     await Doctor.findByIdAndDelete(doctorId).session(session);
     await session.commitTransaction();
     res.status(200).json({

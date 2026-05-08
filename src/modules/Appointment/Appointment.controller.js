@@ -8,6 +8,7 @@ import { sendWhatsAppMessage } from '../../utils/whatsapp.js';
 import { generateRandomPassword } from "../../utils/password.js"; 
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import mongoose from 'mongoose';
 import Stripe from 'stripe';
 
 
@@ -345,16 +346,58 @@ export const getSlotsStatus = async (req, res) => {
   }
 };
 
-/* ---------------------------- To Make Just One Appoinment For Day ---------------------------- */
-
+/* ---------------------------- Get My Appointments (Client) ---------------------------- */
 export const getMyAppointments = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const appointments = await Appointment.find({ user: userId }).select("date startTime endTime");
+    const appointments = await Appointment.find({
+      $or: [{ user: userId }, { bookedBy: userId }],
+    })
+      .populate({
+        path: "doctor",
+        populate: {
+          path: "userId",
+          select: "firstName lastName",
+        },
+      })
+      .populate("service")
+      .sort({ date: -1 });
+
+    const mappedAppointments = appointments.map((appt) => {
+      const apptObj = appt.toObject();
+      if (apptObj.doctor && apptObj.doctor.userId) {
+        apptObj.doctor.user = apptObj.doctor.userId;
+      }
+      return apptObj;
+    });
+
+    res.status(200).json({ appointments: mappedAppointments });
+  } catch (error) {
+    console.error("❌ Error fetching my appointments:", error);
+    res.status(500).json({ message: "Error fetching your appointments" });
+  }
+};
+
+/* ---------------------------- Get Doctor's Appointments ---------------------------- */
+export const getDoctorAppointments = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Find the doctor record associated with this user
+    const doctor = await Doctor.findOne({ userId });
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    const appointments = await Appointment.find({ doctor: doctor._id })
+      .populate("user", "firstName lastName email phone age")
+      .populate("service", "name price")
+      .sort({ date: 1, startTime: 1 });
+
     res.status(200).json({ appointments });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching your appointments" });
+    res.status(500).json({ message: "Error fetching doctor appointments" });
   }
 };
 
@@ -1083,38 +1126,49 @@ export const allowPayment = async (req, res, next) => {
 /* ---------------------------- Get All Appointments for One User ---------------------------- */
 
 export const getUserAppointments = async (req, res) => {
-    try {
-        const userId = req. params.userId;
-        const { status } = req.query;
+  try {
+    const userId = req.params.userId;
+    const { status } = req.query;
 
-        const query = {
-            $or: [
-                { user: userId },
-                { bookedBy: userId }
-            ]
-        };
-
-        if(status) query.status = status;
-
-        const appointments = await Appointment
-        .find(query)
-        .populate({
-            path: 'doctor',
-            populate: {
-            path: 'user',
-            select: 'firstName lastName'
-            }
-        })
-        .populate('service', 'name')
-        .sort({ date: -1 });
-
-        
-        res.status(200).json({ appointments });
-        
-    } catch (error) {
-        res.status(500).json({ message: error.message});
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid User ID" });
     }
-}
+
+    const query = {
+      $or: [
+        { user: new mongoose.Types.ObjectId(userId) },
+        { bookedBy: new mongoose.Types.ObjectId(userId) },
+      ],
+    };
+
+    if (status) query.status = status;
+
+    const appointments = await Appointment.find(query)
+      .populate({
+        path: "doctor",
+        populate: {
+          path: "userId",
+          select: "firstName lastName",
+        },
+      })
+      .populate("service")
+      .sort({ date: -1 });
+
+    // Map to rename userId to user for frontend compatibility
+    const mappedAppointments = appointments.map((appt) => {
+      const apptObj = appt.toObject();
+      if (apptObj.doctor && apptObj.doctor.userId) {
+        apptObj.doctor.user = apptObj.doctor.userId;
+      }
+      return apptObj;
+    });
+
+    res.status(200).json({ appointments: mappedAppointments });
+  } catch (error) {
+    console.error("❌ Error fetching user appointments:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 /* ---------------------------- Rescedule Appointment ---------------------------- */
 
@@ -1149,7 +1203,11 @@ export const rescheduleAppointment = async (req, res) => {
         appointment.date = newDate;
         appointment.startTime = newStartTime;
         appointment.endTime = newEndTime;
-        appointment.status = 'rescheduled';
+        
+        // If Admin reschedules, it stays confirmed. If Client does it, it goes to pending.
+        const isAdmin = req.user.role === 'admin';
+        appointment.status = isAdmin ? 'confirmed' : 'pending';
+        
         appointment.rescheduledFrom = oldAppointment._id;
 
         await appointment.save();
@@ -1254,8 +1312,8 @@ export const markAppointmentCompleted = async (req, res) => {
     }
 
     const now = new Date();
-    if (now < new Date(appointment.endTime)) {
-      return res.status(400).json({ message: 'Cannot complete before session ends' });
+    if (now < new Date(appointment.startTime)) {
+      return res.status(400).json({ message: 'Cannot complete before session starts' });
     }
 
     appointment.status = 'completed';

@@ -91,9 +91,19 @@ export const DoctorSchema = Joi.object({
       "array.min": "At least one available day is required",
       "any.required": "AvailableTimes is required",
     }),
-        type: Joi.string()
-        .valid("doctor")
-        .optional(),
+  email: Joi.string()
+    .email()
+    .pattern(/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/)
+    .required()
+    .messages({
+      "string.email": "Please provide a valid email address",
+      "any.required": "Email is required for new doctors",
+    }),
+  password: Joi.string().min(6).required().messages({
+    "string.min": "Password must be at least 6 characters",
+    "any.required": "Password is required for new doctors",
+  }),
+  type: Joi.string().valid("doctor").optional(),
 });
 
 
@@ -175,17 +185,19 @@ workImages: Joi.array().items(Joi.string().uri()).optional().messages({
   "array.base": "Work images must be an array of URLs"
 }),
 
-services: Joi.array()
-  .items(Joi.string().length(24).hex())
-  .optional()
-  .messages({
-    "string.length": "Each service ID must be 24 characters",
-    "string.hex": "Service ID must be a valid ObjectId"
-  }),
-type: Joi.string()
-        .valid("doctor")
-        .optional(),
-
+  services: Joi.array()
+    .items(Joi.string().length(24).hex())
+    .optional()
+    .messages({
+      "string.length": "Each service ID must be 24 characters",
+      "string.hex": "Service ID must be a valid ObjectId",
+    }),
+  email: Joi.string()
+    .email()
+    .pattern(/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/)
+    .optional(),
+  password: Joi.string().min(6).optional(),
+  type: Joi.string().valid("doctor").optional(),
 });
 
 export const doctorIdSchema = Joi.object({
