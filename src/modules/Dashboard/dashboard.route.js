@@ -1,4 +1,3 @@
-// src/modules/Dashboard/dashboard.router.js
 import { Router } from "express";
 import * as dashController from "./dashboard.controller.js";
 import { isAuth } from "../../middleware/isauthMiddleware.js";
@@ -49,6 +48,7 @@ router.put("/services/:id",
   validateParams(dashVal.servicesIdSchema),
   upload.single("image"),
   cleanBody,
+
   validate(dashVal.updateServiceSchema),
   dashController.updateService
 );
@@ -94,4 +94,72 @@ router.delete(
   upload.single("image"),
   dashController.updateImage
 );
+
+
+
+/* ----------------- Review Management (Admin) ----------------- */
+
+// ------------------ Doctor Reviews Admin ------------------
+router.get("/reviews/doctors", 
+  dashController.getAllDoctorReviewsForAdmin
+);
+
+router.get("/reviews/doctors/pending", 
+  dashController.getPendingDoctorReviews
+);
+
+router.patch("/reviews/doctors/:id/approve", 
+  dashController.approveDoctorReview
+);
+
+router.patch("/reviews/doctors/:id/reject", 
+  dashController.rejectDoctorReview
+);
+
+router.get("/reviews/doctors/pending-edits", 
+  dashController.getDoctorReviewsWithPendingEdits
+);
+
+router.put("/reviews/doctors/:id/edit-decision", 
+  dashController.handleDoctorReviewEditApproval
+);
+
+router.delete("/reviews/doctors/rejected/:id", 
+  dashController.deleteRejectedDoctorReview
+);
+
+// ------------------ Clinic Reviews Admin ------------------
+router.get("/reviews/clinic", 
+  dashController.getAllClinicReviewsForAdmin
+);
+
+router.get("/reviews/clinic/pending", 
+  dashController.getPendingClinicReviews
+);
+
+router.patch("/reviews/clinic/:id/approve", 
+  dashController.approveClinicReview
+);
+
+router.patch("/reviews/clinic/:id/reject", 
+  dashController.rejectClinicReview
+);
+
+router.get("/reviews/clinic/pending-edits", 
+  dashController.getClinicReviewsWithPendingEdits
+);
+
+router.put("/reviews/clinic/:id/edit-decision", 
+  dashController.handleClinicReviewEditApproval
+);
+
+router.delete("/reviews/clinic/rejected/:id", 
+  dashController.deleteRejectedClinicReview
+);
+
+// ------------------ Review Stats ------------------
+router.get("/reviews/stats", 
+  dashController.getReviewStats
+);
+
 export default router;

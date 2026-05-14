@@ -7,11 +7,8 @@ import ReviewDoctors from "../../../DB/models/reviewDoctors.model.js";
 import { v2 as cloudinary } from "cloudinary";
 import { extractPublicId } from "../../../utils/extractPublicId.js";
 import GalleryImage from "../../../DB/models/gallery.model.js";
-
-
-
-
-
+import ReviewClinic from "../../../DB/models/reviewClinic.model.js";
+import { sendDoctorReviewApprovalEmail, sendDoctorReviewRejectionEmail, sendClinicReviewApprovalEmail,sendClinicReviewRejectionEmail } from "../../../src/services/email.service.js";
 import bcrypt from "bcryptjs";
 
 /* ----------------- Doctor Management ----------------- */
@@ -379,20 +376,16 @@ export const createServices = async (req, res, next) => {
 /* ---------------------------- Edit Service by ID ---------------------------- */
 export const updateService = async (req, res, next) => {
   try {
-    const updatedData = { ...req.body };
+    const serviceId = req.params.id;
 
-    const oldService = await Service.findById(req.params.id);
+    const oldService = await Service.findById(serviceId);
     if (!oldService) {
       return res.status(404).json({ message: "Service not found" });
     }
 
-    if (updatedData.name && updatedData.name !== oldService.name) {
-      const existing = await Service.findOne({ name: updatedData.name });
-      if (existing) {
-        return res.status(400).json({ message: "Service name already exists" });
-      }
-    }
+    let updatedData = { ...req.body };
 
+    // ----------------- CATEGORY VALIDATION -----------------
     if (updatedData.category) {
       const categoryExists = await Category.findById(updatedData.category);
       if (!categoryExists) {
@@ -400,22 +393,21 @@ export const updateService = async (req, res, next) => {
       }
     }
 
-    // Validate doctors type if provided
-    if (updatedData.doctors && !Array.isArray(updatedData.doctors)) {
-      return res.status(400).json({ message: "Doctors must be an array" });
-    }
+    // ----------------- DOCTORS VALIDATION -----------------
+    if (updatedData.doctors) {
+      if (!Array.isArray(updatedData.doctors)) {
+        return res.status(400).json({ message: "Doctors must be an array" });
+      }
 
-    if (updatedData.doctors && updatedData.doctors.length > 0) {
       for (const doctorId of updatedData.doctors) {
         const doctor = await Doctor.findById(doctorId);
         if (!doctor) {
-          return res
-            .status(400)
-            .json({ message: `Invalid doctor ID: ${doctorId}` });
+          return res.status(400).json({ message: `Invalid doctor ID: ${doctorId}` });
         }
       }
     }
 
+    // ----------------- IMAGE HANDLING -----------------
     if (req.file) {
       updatedData.image = req.file.path;
 
@@ -423,26 +415,33 @@ export const updateService = async (req, res, next) => {
         const publicId = extractPublicId(oldService.image);
         await cloudinary.uploader.destroy(publicId);
       }
+    } else {
+      updatedData.image = oldService.image;
     }
 
+    // ----------------- MERGE (IMPORTANT PART) -----------------
+    const finalData = {
+      ...oldService.toObject(),
+      ...updatedData,
+    };
+
+    // ----------------- UPDATE -----------------
     const updatedService = await Service.findByIdAndUpdate(
-      req.params.id,
-      updatedData,
-      { new: true }
+      serviceId,
+      finalData,
+      {
+        new: true,
+        runValidators: true,
+      }
     );
-    
-    // Advanced Sync: Only update if doctors array was provided in request
+
+    // ----------------- SYNC DOCTORS (same logic you already have) -----------------
     if (updatedData.doctors !== undefined) {
       const oldDoctorsStr = (oldService.doctors || []).map(id => id.toString());
       const newDoctorsStr = (updatedData.doctors || []).map(id => id.toString());
 
-      const doctorsToRemove = oldDoctorsStr.filter(
-        id => !newDoctorsStr.includes(id)
-      );
-
-      const doctorsToAdd = newDoctorsStr.filter(
-        id => !oldDoctorsStr.includes(id)
-      );
+      const doctorsToRemove = oldDoctorsStr.filter(id => !newDoctorsStr.includes(id));
+      const doctorsToAdd = newDoctorsStr.filter(id => !oldDoctorsStr.includes(id));
 
       if (doctorsToRemove.length > 0) {
         await Doctor.updateMany(
@@ -458,8 +457,12 @@ export const updateService = async (req, res, next) => {
         );
       }
     }
-    
-    res.status(200).json(updatedService);
+
+    return res.status(200).json({
+      message: "Service updated successfully",
+      service: updatedService,
+    });
+
   } catch (err) {
     next(err);
   }
@@ -642,5 +645,450 @@ export const updateImage = async (req, res) => {
   } catch (err) {
     console.error("Error in updateImage:", err);
     res.status(500).json({ error: "Update failed", details: err.message });
+  }
+};
+
+
+// ===================== REVIEW MANAGEMENT (ADMIN) =====================
+
+
+// ------------------ تحديث متوسط تقييم الدكتور ------------------
+const updateDoctorAverageRating = async (doctorId) => {
+  const reviews = await ReviewDoctors.find({ doctor: doctorId, status: "approved" });
+
+  let averageRating = 0;
+  let numberOfReviews = reviews.length;
+
+  if (reviews.length > 0) {
+    const totalRatings = reviews.reduce((sum, review) => sum + review.rating, 0);
+    averageRating = Number((totalRatings / reviews.length).toFixed(1));
+  }
+
+  await Doctor.findByIdAndUpdate(doctorId, { 
+    averageRating, 
+    numberOfReviews 
+  });
+};
+
+// ------------------ تقييمات الأطباء (للأدمن) ------------------
+export const getAllDoctorReviewsForAdmin = async (req, res, next) => {
+  try {
+    const reviews = await ReviewDoctors.find()
+      .populate("user", "firstName lastName email image")
+      .populate("doctor", "firstName lastName specialization profileImage")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: reviews.length,
+      reviews,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ التقييمات قيد المراجعة (أطباء) ------------------
+export const getPendingDoctorReviews = async (req, res, next) => {
+  try {
+    const pendingReviews = await ReviewDoctors.find({ status: "pending" })
+      .populate("user", "firstName lastName email image")
+      .populate("doctor", "firstName lastName specialization profileImage")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ 
+      success: true, 
+      count: pendingReviews.length, 
+      pendingReviews 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ------------------ الموافقة على تقييم دكتور ------------------
+export const approveDoctorReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // const review = await ReviewDoctors.findByIdAndUpdate(id, { status:'approved',
+    // approvedAt: new Date() }, { new: true })
+    // .populate('user', 'firstName lastName email')
+    // .populate('doctor', 'firstName lastName');
+
+    const review = await ReviewDoctors.findByIdAndUpdate(
+  id,
+  {
+    status: "approved",
+    approvedAt: new Date()
+  },
+  { new: true }
+)
+.populate("user", "firstName lastName email")
+.populate({
+  path: "doctor",
+  populate: {
+    path: "user",
+    select: "firstName lastName"
+  }
+});
+
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    // review.status = "approved";
+    // await review.save();
+
+    await updateDoctorAverageRating(review.doctor);
+
+    // إرسال إيميل للمستخدم
+    await sendDoctorReviewApprovalEmail(review.user, review.doctor, review);
+// await sendDoctorReviewApprovalEmail(review.user.email, review.user.firstName,
+//     `Dr. ${review.doctor.firstName} ${review.doctor.lastName}`);
+ 
+    
+    res.status(200).json({ 
+      success: true,
+      message: "Review approved and user notified", 
+      review 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ------------------ رفض تقييم دكتور ------------------
+export const rejectDoctorReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    
+    // const review = await ReviewDoctors.findById(id)
+    //   .populate("user")
+    //   .populate("doctor");
+
+    const review = await ReviewDoctors.findById(id)
+  .populate("user", "firstName lastName email")
+  .populate({
+    path: "doctor",
+    populate: {
+      path: "user",
+      select: "firstName lastName",
+    },
+  });
+
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    review.status = "rejected";
+    review.rejectionReason = reason || "Does not meet our review guidelines";
+    await review.save();
+
+    // إرسال إيميل للمستخدم
+    await sendDoctorReviewRejectionEmail(review.user, review.doctor, review);
+
+    res.status(200).json({ 
+      success: true,
+      message: "Review rejected and user notified", 
+      review 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ------------------ التقييمات التي تحتوي على تعديلات معلقة (أطباء) ------------------
+export const getDoctorReviewsWithPendingEdits = async (req, res, next) => {
+  try {
+    const pendingEdits = await ReviewDoctors.find({ 
+      editStatus: "pending", 
+      pendingEdit: { $ne: null } 
+    })
+      .populate("user", "firstName lastName email image")
+      .populate("doctor", "firstName lastName specialization profileImage")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: pendingEdits.length,
+      pendingEdits,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ الموافقة/رفض تعديل التقييم (أطباء) ------------------
+export const handleDoctorReviewEditApproval = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { decision } = req.body;
+
+    if (!["approved", "rejected"].includes(decision)) {
+      return res.status(400).json({ message: "Invalid decision" });
+    }
+
+    const review = await ReviewDoctors.findById(id);
+    if (!review || !review.pendingEdit) {
+      return res.status(404).json({ message: "No pending edit found" });
+    }
+
+    if (decision === "approved") {
+      if (review.pendingEdit.comment) review.comment = review.pendingEdit.comment;
+      if (typeof review.pendingEdit.rating === "number") review.rating = review.pendingEdit.rating;
+      review.status = "approved";
+    }
+
+    review.pendingEdit = null;
+    review.editStatus = decision;
+
+    await review.save();
+
+    if (decision === "approved") {
+      await updateDoctorAverageRating(review.doctor);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Edit has been ${decision}`,
+      review,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ حذف تقييم مرفوض (أطباء) ------------------
+export const deleteRejectedDoctorReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const review = await ReviewDoctors.findById(id);
+    
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    if (review.status !== "rejected") {
+      return res.status(400).json({ message: "Only rejected reviews can be deleted" });
+    }
+
+    await ReviewDoctors.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Rejected review deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===================== CLINIC REVIEWS (ADMIN) =====================
+
+// ------------------ جميع تقييمات العيادة (للأدمن) ------------------
+export const getAllClinicReviewsForAdmin = async (req, res, next) => {
+  try {
+    const reviews = await ReviewClinic.find()
+      .populate("user", "firstName lastName email image")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ 
+      success: true, 
+      count: reviews.length, 
+      reviews 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ تقييمات العيادة قيد المراجعة ------------------
+export const getPendingClinicReviews = async (req, res, next) => {
+  try {
+    const pendingReviews = await ReviewClinic.find({ status: "pending" })
+      .populate("user", "firstName lastName email image")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ 
+      success: true, 
+      count: pendingReviews.length, 
+      pendingReviews 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ------------------ الموافقة على تقييم العيادة ------------------
+export const approveClinicReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const review = await ReviewClinic.findByIdAndUpdate(
+      id,
+      {
+        status: "approved",
+        approvedAt: new Date(),
+      },
+      { new: true }
+    ).populate("user", "firstName lastName email image");
+
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    await sendClinicReviewApprovalEmail(
+      review.user,
+      review
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Clinic review approved and user notified",
+      review,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+// ------------------ رفض تقييم العيادة ------------------
+export const rejectClinicReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const review = await ReviewClinic.findByIdAndUpdate(
+      id,
+      {
+        status: "rejected",
+        rejectionReason: reason || "Does not meet our review guidelines",
+      },
+      { new: true }
+    ).populate("user", "firstName lastName email image");
+
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    await sendClinicReviewRejectionEmail(
+      review.user,
+      review
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Clinic review rejected and user notified",
+      review,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ تقييمات العيادة مع تعديلات معلقة ------------------
+export const getClinicReviewsWithPendingEdits = async (req, res, next) => {
+  try {
+    const pendingEdits = await ReviewClinic.find({
+      editStatus: "pending",
+      pendingEdit: { $ne: null },
+    })
+      .populate("user", "firstName lastName email image")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: pendingEdits.length,
+      pendingEdits,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ الموافقة/رفض تعديل تقييم العيادة ------------------
+export const handleClinicReviewEditApproval = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { decision } = req.body;
+
+    if (!["approved", "rejected"].includes(decision)) {
+      return res.status(400).json({ message: "Invalid decision" });
+    }
+
+    const review = await ReviewClinic.findById(id);
+    if (!review || !review.pendingEdit) {
+      return res.status(404).json({ message: "No pending edit found" });
+    }
+
+    if (decision === "approved") {
+      if (review.pendingEdit.comment) review.comment = review.pendingEdit.comment;
+      if (typeof review.pendingEdit.rating === "number") review.rating = review.pendingEdit.rating;
+      review.status = "approved";
+    }
+
+    review.pendingEdit = null;
+    review.editStatus = decision;
+    await review.save();
+
+    res.status(200).json({ 
+      success: true, 
+      message: `Edit has been ${decision}`, 
+      review 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------ حذف تقييم عيادة مرفوض ------------------
+export const deleteRejectedClinicReview = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const review = await ReviewClinic.findById(id);
+    
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    if (review.status !== "rejected") {
+      return res.status(400).json({ message: "Only rejected reviews can be deleted" });
+    }
+
+    await ReviewClinic.findByIdAndDelete(id);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Rejected clinic review deleted" 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ------------------ إحصائيات سريعة للتقييمات ------------------
+export const getReviewStats = async (req, res, next) => {
+  try {
+    const doctorStats = await ReviewDoctors.aggregate([
+      { $group: { 
+        _id: "$status", 
+        count: { $sum: 1 } 
+      }}
+    ]);
+
+    const clinicStats = await ReviewClinic.aggregate([
+      { $group: { 
+        _id: "$status", 
+        count: { $sum: 1 } 
+      }}
+    ]);
+
+    const doctorPendingEdits = await ReviewDoctors.countDocuments({ editStatus: "pending" });
+    const clinicPendingEdits = await ReviewClinic.countDocuments({ editStatus: "pending" });
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        doctors: doctorStats,
+        clinic: clinicStats,
+        pendingEdits: {
+          doctors: doctorPendingEdits,
+          clinic: clinicPendingEdits
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
   }
 };

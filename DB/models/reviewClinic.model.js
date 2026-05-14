@@ -1,5 +1,4 @@
 import mongoose, { Schema } from "mongoose";
-
 const reviewClinicSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: "User", required: true },
   rating: { type: Number, required: true, min: 1, max: 5 },
@@ -9,6 +8,10 @@ const reviewClinicSchema = new Schema({
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
+    rejectionReason: {
+       type: String, 
+       default: null 
+      },
     pendingEdit: {
     comment: { type: String },
     rating: { type: Number, min: 1, max: 5 }
@@ -16,7 +19,7 @@ const reviewClinicSchema = new Schema({
   editStatus: {
     type: String,
     enum: ["pending", "approved", "rejected"],
-    default: "pending",
+    default: null,
   }
 
 }, { timestamps: true });
