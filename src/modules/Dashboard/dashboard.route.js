@@ -48,7 +48,7 @@ router.put("/services/:id",
   validateParams(dashVal.servicesIdSchema),
   upload.single("image"),
   cleanBody,
-
+  parseServiceFields,
   validate(dashVal.updateServiceSchema),
   dashController.updateService
 );

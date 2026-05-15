@@ -341,7 +341,6 @@ export const createServices = async (req, res, next) => {
       return res.status(400).json({ message: "Service with this name already exists!" });
     }
 
-// ✅ Allow doctors to be optional or empty array
     let validDoctors = [];
     if (doctors && Array.isArray(doctors) && doctors.length > 0) {
       validDoctors = await Doctor.find({ _id: { $in: doctors } });
@@ -356,7 +355,6 @@ export const createServices = async (req, res, next) => {
       image: req.file.path,
     });
 
-    // ✅ Only add service to doctors if doctors exist
     if (doctors && doctors.length > 0) {
       await Doctor.updateMany(
         { _id: { $in: doctors } },
@@ -366,6 +364,7 @@ export const createServices = async (req, res, next) => {
     res.status(201).json({
       message: "Service created successfully",
       service: newService,
+      
     });
   } catch (err) {
     next(err);
