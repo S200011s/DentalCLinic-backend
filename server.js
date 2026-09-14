@@ -43,29 +43,30 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
-// app.use(
-//   cors({
-//     origin: "http://localhost:5173",
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
-// app.use(
-//   cors({
-//     origin: process.env.FRONTEND_URL || "http://localhost:5173",
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  })
+);
 //change before production 
-app.use(cors({
-  origin: true, 
-  credentials: true
-}));
+// app.use(cors({
+//   origin: true, 
+//   credentials: true
+// }));
 app.post(
   "/webhook/stripe",
   express.raw({ type: "application/json" }),
   stripeWebhook
 );
+
 
 app.use(express.json());
 
