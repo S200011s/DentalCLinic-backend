@@ -6,7 +6,7 @@ import Category from "../../../DB/models/serviceCategory.model.js";
 import ReviewDoctors from "../../../DB/models/reviewDoctors.model.js";
 import { v2 as cloudinary } from "cloudinary";
 import { extractPublicId } from "../../../utils/extractPublicId.js";
-import GalleryImage from "../../../DB/models/gallery.model.js";
+import GalleryImage from "../../../DB/models/Gallery.model.js";
 import ReviewClinic from "../../../DB/models/reviewClinic.model.js";
 import { sendDoctorReviewApprovalEmail, sendDoctorReviewRejectionEmail, sendClinicReviewApprovalEmail,sendClinicReviewRejectionEmail } from "../../../src/services/email.service.js";
 import bcrypt from "bcryptjs";

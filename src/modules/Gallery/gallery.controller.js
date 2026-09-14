@@ -1,4 +1,4 @@
-import GalleryImage from "../../../DB/models/gallery.model.js";
+import GalleryImage from "../../../DB/models/Gallery.model";
 import { v2 as cloudinary } from "cloudinary";
 
 
