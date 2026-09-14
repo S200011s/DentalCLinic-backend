@@ -23,7 +23,7 @@ import paymentRoutes from "./src/modules/Payment/Payment.route.js";
 import { stripeWebhook } from "./src/utils/stripeWebhook.js";
 import statsRoutes from "./src/modules/Stats/Stats.route.js";
 import reviewRoutes from "./src/modules/review/review.routes.js";
-import galleryRoutes from "./src/modules/gallery/gallery.route.js";
+import galleryRoutes from "./src/modules/Gallery/gallery.route.js";
 
 import * as reviewController from "./src/modules/review/review.controller.js";
 // dotenv.config();
