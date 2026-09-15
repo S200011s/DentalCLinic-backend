@@ -44,32 +44,6 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
-// app.use(
-//   cors({
-//     origin: "http://localhost:5173",
-//     credentials: true,
-//   })
-// );
-
-// app.use(
-//   cors({
-//     origin: process.env.FRONTEND_URL || "http://localhost:5173",
-//     credentials: true,
-//   })
-// );
-//change before production 
-// app.use(cors({
-//   origin: true, 
-//   credentials: true
-// }));
-
-
-// ✅ CORRECT
-// const allowedOrigins = [
-//   "http://localhost:5173",
-//   "http://localhost:5174",
-//   "https://dental-c-linic-frontend.vercel.app", 
-// ];
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -128,7 +102,7 @@ db_connection();
 app.use("/api/auth", AuthRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/user", userInfo);
-app.use("/api/doctor", doctorInfo);
+app.use("/api/doctors", doctorInfo);
 app.use("/api/services", services);
 app.use("/api/category", category);
 app.use("/api/search", searchRoutes);
@@ -141,9 +115,4 @@ app.use("/api/review", reviewRoutes);
 /* ------------------------ Error Handling from middleWare  ----------------------- */
 app.use(errorHandler);
 
-// const PORT = process.env.PORT || 5000;
-// const HOST = process.env.HOST || "127.0.0.1";
-// app.listen(PORT, HOST, () => {
-//   console.log(`Server running at http://${HOST}:${PORT}`);
-// });
 export default app;
